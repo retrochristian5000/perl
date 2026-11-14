@@ -23,9 +23,9 @@
 case "$0" in
 *configure)
     if cmp "$0" "${0%configure}Configure" >/dev/null; then
-	echo "Your configure and Configure scripts seem to be identical."
-	echo "This can happen on filesystems that aren't fully case sensitive."
-	echo "You'll have to explicitly extract Configure and run that."
+	printf '%s\n' "Your configure and Configure scripts seem to be identical."
+	printf '%s\n' "This can happen on filesystems that aren't fully case sensitive."
+	printf '%s\n' "You'll have to explicitly extract Configure and run that."
 	exit 1
     fi
     ;;
@@ -86,7 +86,7 @@ EOM
 		;;
 	--*)
 		opt=${1%%=*}
-		echo "This GNU configure front end does not understand $opt"
+		printf '%s\n' "This GNU configure front end does not understand $opt"
 		exit 1
 		;;
 	*)
@@ -132,5 +132,5 @@ esac
 
 eval "set X sh Configure $copt $create $opts"
 shift
-echo "$@"
+printf '%s\n' "$*"
 exec "$@"
