@@ -22,7 +22,7 @@
 
 case "$0" in
 *configure)
-    if cmp $0 `echo $0 | sed -e s/configure/Configure/` >/dev/null; then
+    if cmp "$0" "${0%configure}Configure" >/dev/null; then
 	echo "Your configure and Configure scripts seem to be identical."
 	echo "This can happen on filesystems that aren't fully case sensitive."
 	echo "You'll have to explicitly extract Configure and run that."
@@ -59,7 +59,7 @@ EOM
 		shift
 		;;
 	--prefix=*)
-		arg=`echo $1 | sed 's/--prefix=/-Dprefix=/'`
+		arg="-Dprefix=${1#--prefix=}"
 		opts="$opts $arg"
 		shift
 		;;
@@ -85,7 +85,7 @@ EOM
 		shift
 		;;
 	--*)
-		opt=`echo $1 | sed 's/=.*//'`
+		opt=${1%%=*}
 		echo "This GNU configure front end does not understand $opt"
 		exit 1
 		;;
