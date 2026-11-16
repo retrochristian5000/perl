@@ -122,20 +122,31 @@ ccflags="${ccflags} -fno-common -DPERL_DARWIN"
 # stdint.h defining INT32_MIN as (-INT32_MAX-1)
 # -- Edward Moy
 #
-if test -f /usr/include/stdint.h; then
-  case "$(grep '^#define INT32_MIN' /usr/include/stdint.h)" in
-  *-2147483648) ccflags="${ccflags} -DINT32_MIN_BROKEN -DINT64_MIN_BROKEN" ;;
-  esac
-fi
+# This pre-SDK /usr/include workaround only applies to Darwin 1.x.
+# On modern macOS the active headers come from the selected SDK, not
+# necessarily from the host's /usr/include tree.
+case "$osvers" in
+1.*)
+  if test -f /usr/include/stdint.h; then
+    case "$(grep '^#define INT32_MIN' /usr/include/stdint.h)" in
+    *-2147483648) ccflags="${ccflags} -DINT32_MIN_BROKEN -DINT64_MIN_BROKEN" ;;
+    esac
+  fi
+  ;;
+esac
 
-# Avoid Apple's cpp precompiler, better for extensions
-if [ "X`echo | ${cc} -no-cpp-precomp -E - 2>&1 >/dev/null`" = "X" ]; then
-    cppflags="${cppflags} -no-cpp-precomp"
+# -no-cpp-precomp was an early Darwin precompiler workaround. Never
+# probe/inject it into a modern Apple Clang (or alternate native compiler).
+case "$osvers" in
+[1-8].*)
+  if [ "X`echo | ${cc} -no-cpp-precomp -E - 2>&1 >/dev/null`" = "X" ]; then
+      cppflags="${cppflags} -no-cpp-precomp"
 
-    # This is necessary because perl's build system doesn't
-    # apply cppflags to cc compile lines as it should.
-    ccflags="${ccflags} ${cppflags}"
-fi
+      # Perl's historical build did not always forward cppflags.
+      ccflags="${ccflags} ${cppflags}"
+  fi
+  ;;
+esac
 
 # Known optimizer problems.
 case "`cc -v 2>&1`" in
@@ -148,17 +159,21 @@ so='dylib';
 dlext='bundle';
 usedl='define';
 
-# 10.4 can use dlopen.
-# 10.4 broke poll(). - Apple bug number 3710161
+# 10.4 (Darwin 8.x) can use dlopen but had broken poll().
+# Keep the historical workaround scoped to that kernel release. On modern
+# Darwin, let Configure test poll() against the selected SDK and runtime.
 # https://lists.apple.com/archives/Darwin-dev/2005/May/msg00220.html
 case "$osvers" in
 [1-7].*)
     dlsrc='dl_dyld.xs';
     ;;
-*)
+8.*)
     dlsrc='dl_dlopen.xs';
     d_poll='undef';
     i_poll='undef';
+    ;;
+*)
+    dlsrc='dl_dlopen.xs';
     ;;
 esac
 
@@ -501,9 +516,12 @@ esac
 # really need ODBM_FIle, though, so let's just hint ODBM away.
 i_dbm=undef;
 
-# Configure doesn't detect ranlib on Tiger properly.
-# NeilW says this should be acceptable on all darwin versions.
-ranlib='ranlib'
+# Configure historically failed to detect ranlib on Tiger. Supply a
+# fallback only when no earlier tool selection exists; never erase a
+# native ranlib explicitly chosen by a caller or policy hints.
+case "$ranlib" in
+'') ranlib='ranlib' ;;
+esac
 
 # Catch MacPorts gcc/g++ extra libdir
 case "$($cc -v 2>&1)" in
