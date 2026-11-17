@@ -31,106 +31,117 @@ case "$0" in
     ;;
 esac
 
-opts=''
+# Keep the original argument count while appending translated options to
+# "$@". This is POSIX sh and does not reinterpret user input through eval.
 verbose=''
 create='-e'
-while test $# -gt 0; do
-	case $1 in
+show_version=''
+remaining=$#
+while test "$remaining" -gt 0; do
+    option=$1
+    shift
+    remaining=$((remaining - 1))
+    case "$option" in
     --help)
-		cat <<EOM
+        cat <<EOM
 Usage: configure.gnu [options]
-This is GNU configure-like front end for a metaconfig-generated Configure.
+This is a GNU configure-like front end for a metaconfig-generated Configure.
 It emulates the following GNU configure options (must be fully spelled out):
-	--help
-	--no-create
-	--prefix=PREFIX
- 	--cache-file  (ignored)
-	--quiet
-	--silent
-	--verbose
-	--version
+    --help
+    --no-create
+    --prefix=PREFIX
+    --cache-file=FILE  (ignored)
+    --quiet
+    --silent
+    --verbose
+    --version
 
-And it honours these environment variables: CC, CFLAGS and DEFS.
+And it honours these environment variables: CC, CFLAGS, DEFS and LDFLAGS.
 EOM
-		exit 0
-		;;
-	--no-create)
-		create='-E'
-		shift
-		;;
-	--prefix=*)
-		arg="-Dprefix=${1#--prefix=}"
-		opts="$opts $arg"
-		shift
-		;;
-	--prefix)
-		shift
-		arg="-Dprefix=$1"
-		opts="$opts $arg"
-		shift
-		;;
- 	--cache-file=*)
- 		shift		# Just ignore it.
- 		;;
-	--quiet|--silent)
-		exec >/dev/null 2>&1
-		shift
-		;;
-	--verbose)
-		verbose=true
-		shift
-		;;
-	--version)
-		copt="$copt -V"
-		shift
-		;;
-	--*)
-		opt=${1%%=*}
-		printf '%s\n' "This GNU configure front end does not understand $opt"
-		exit 1
-		;;
-	*)
-		opts="$opts '$1'"
-		shift
-		;;
-	esac
+        exit 0
+        ;;
+    --no-create)
+        create='-E'
+        ;;
+    --prefix=*|--prefix)
+        case "$option" in
+            --prefix=*) prefix=${option#--prefix=} ;;
+            --prefix)
+                if test "$remaining" -eq 0; then
+                    printf '%s\n' 'configure.gnu: --prefix requires a value' >&2
+                    exit 2
+                fi
+                prefix=$1
+                shift
+                remaining=$((remaining - 1))
+                ;;
+        esac
+        case "$prefix" in
+            ''|--*)
+                printf '%s\n' 'configure.gnu: --prefix requires a nonempty value' >&2
+                exit 2 ;;
+        esac
+        set -- "$@" "-Dprefix=$prefix"
+        ;;
+    --cache-file=*)
+        : # Metaconfig does not have a corresponding cache option.
+        ;;
+    --cache-file)
+        if test "$remaining" -eq 0; then
+            printf '%s\n' 'configure.gnu: --cache-file requires a value' >&2
+            exit 2
+        fi
+        case "$1" in
+            ''|--*)
+                printf '%s\n' 'configure.gnu: --cache-file requires a value' >&2
+                exit 2 ;;
+        esac
+        shift
+        remaining=$((remaining - 1))
+        ;;
+    --quiet|--silent)
+        exec >/dev/null 2>&1
+        ;;
+    --verbose)
+        verbose=true
+        ;;
+    --version)
+        show_version=true
+        ;;
+    --*)
+        printf 'configure.gnu: unsupported option: %s\n' "$option" >&2
+        exit 1
+        ;;
+    *)
+        set -- "$@" "$option"
+        ;;
+    esac
 done
 
-case "$CC" in
-'') ;;
-*) opts="$opts -Dcc='$CC'";;
-esac
+# Append native Configure assignments as *single arguments*, including values
+# with spaces, quotes, semicolons, and shell substitutions.
+if test -n "${CC:-}"; then
+    set -- "$@" "-Dcc=$CC"
+fi
+ccflags=${DEFS:-}
+if test -n "${CFLAGS:-}"; then
+    ccflags="${ccflags:+$ccflags }$CFLAGS"
+fi
+if test -n "$ccflags"; then
+    set -- "$@" "-Dccflags=$ccflags"
+fi
+if test -n "${LDFLAGS:-}"; then
+    set -- "$@" "-Dldflags=$LDFLAGS"
+fi
 
-# Join DEFS and CFLAGS together.
-ccflags=''
-case "$DEFS" in
-'') ;;
-*) ccflags=$DEFS;;
-esac
-case "$CFLAGS" in
-'') ;;
-*) ccflags="$ccflags $CFLAGS";;
-esac
-case "$ccflags" in
-'') ;;
-*) opts="$opts -Dccflags='$ccflags'";;
-esac
-case "$LDFLAGS" in
-'') ;;
-*) ldflags="$ldflags $LDFLAGS";;
-esac
-case "$ldflags" in
-'') ;;
-*) opts="$opts -Dldflags='$ldflags'";;
-esac
-
-# Don't use -s if they want verbose mode
-case "$verbose" in
-'') copt="$copt -ds";;
-*) copt="$copt -d";;
-esac
-
-eval "set X sh Configure $copt $create $opts"
-shift
+if test -n "$verbose"; then
+    set -- -d "$create" "$@"
+else
+    set -- -ds "$create" "$@"
+fi
+if test -n "$show_version"; then
+    set -- -V "$@"
+fi
+set -- sh Configure "$@"
 printf '%s\n' "$*"
 exec "$@"

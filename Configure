@@ -198,9 +198,23 @@ case "$CDPATH" in
 	;;
 esac
 
-: Configure runs within the UU subdirectory
-test -d UU || mkdir UU
-cd UU && rm -f ./*
+: Configure runs within the UU subdirectory.
+# A failed mkdir, cd, or cleanup must not leave configuration executing in
+# the source tree and producing an apparently successful partial build.
+if test ! -d UU; then
+    mkdir UU || {
+        printf '%s\n' 'Configure: cannot create UU working directory' >&2
+        exit 1
+    }
+fi
+cd UU || {
+    printf '%s\n' 'Configure: cannot enter UU working directory' >&2
+    exit 1
+}
+rm -f ./* || {
+    printf '%s\n' 'Configure: cannot clean UU working directory' >&2
+    exit 1
+}
 
 ccname=''
 ccversion=''
