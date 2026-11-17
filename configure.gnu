@@ -34,6 +34,7 @@ esac
 # Keep the original argument count while appending translated options to
 # "$@". This is POSIX sh and does not reinterpret user input through eval.
 verbose=''
+quiet=''
 create='-e'
 show_version=''
 remaining=$#
@@ -100,7 +101,8 @@ EOM
         remaining=$((remaining - 1))
         ;;
     --quiet|--silent)
-        exec >/dev/null 2>&1
+        quiet=true
+        exec >/dev/null
         ;;
     --verbose)
         verbose=true
@@ -144,4 +146,12 @@ if test -n "$show_version"; then
 fi
 set -- sh Configure "$@"
 printf '%s\n' "$*"
+if test -n "$quiet"; then
+    "$@"
+    status=$?
+    if test "$status" -ne 0; then
+        printf 'configure.gnu: Configure failed (exit status %s). See diagnostics above and UU/try.msg if present.\n' "$status" >&2
+    fi
+    exit "$status"
+fi
 exec "$@"
