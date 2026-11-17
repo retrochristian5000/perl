@@ -134,8 +134,25 @@ unless(defined $makecmd and $makecmd =~ /^MAKE=(.*)$/) {
 # Keep legacy command-plus-flags values (e.g. "nmake -nologo") intact for
 # older platforms that deliberately pass arguments in MAKE.
 my $make_command = $1 || $Config{make} || $ENV{MAKE};
-my @make = $make_command =~ m{[/\\]} && -x $make_command
-    ? ($make_command) : split ' ', $make_command;
+my @make;
+if ($make_command =~ m{[/\\]} && -x $make_command) {
+    @make = ($make_command);
+} else {
+    @make = split ' ', $make_command;
+    # A selected full executable path can contain whitespace *and* carry
+    # historical Make options, e.g. "/path with spaces/make -s". Find the
+    # longest executable prefix, leaving any trailing options untouched.
+    # Do not interpret MAKE through eval or a shell, and retain the original
+    # split behavior for older nmake/gmake command forms.
+    if ($make_command =~ m{[/\\]} && @make > 1) {
+        for (my $i = $#make - 1; $i >= 1; --$i) {
+            my $candidate = join ' ', @make[0 .. $i];
+            next unless -x $candidate;
+            @make = ($candidate, @make[$i + 1 .. $#make]);
+            last;
+        }
+    }
+}
 die "make_ext: no usable MAKE command supplied\n" unless @make;
 
 
