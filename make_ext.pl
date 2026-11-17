@@ -128,10 +128,16 @@ unless(defined $makecmd and $makecmd =~ /^MAKE=(.*)$/) {
     die "$0:  WARNING:  Please include MAKE=\$(MAKE) in \@ARGV\n";
 }
 
-# This isn't going to cope with anything fancy, such as spaces inside command
-# names, but neither did what it replaced. Once there is a use case that needs
-# it, please supply patches. Until then, I'm sticking to KISS
-my @make = split ' ', $1 || $Config{make} || $ENV{MAKE};
+# MAKE= comes from the parent Makefile, not from PATH rediscovery.
+# Treat an executable pathname containing whitespace as ONE program; this
+# matters for managed native Make installed in a nonstandard host prefix.
+# Keep legacy command-plus-flags values (e.g. "nmake -nologo") intact for
+# older platforms that deliberately pass arguments in MAKE.
+my $make_command = $1 || $Config{make} || $ENV{MAKE};
+my @make = $make_command =~ m{[/\\]} && -x $make_command
+    ? ($make_command) : split ' ', $make_command;
+die "make_ext: no usable MAKE command supplied\n" unless @make;
+
 
 
 if ($target eq '') {
@@ -543,19 +549,28 @@ EOM
 	# But this always used to be a problem with the old /bin/sh version of
 	# this.
 	if (IS_UNIX) {
+            # The fallback runs after miniperl may have been deleted; do not
+            # rediscover a bare 'make' or split an executable path on spaces.
+            # Quote each argument for the POSIX shell script independently.
+            my $shell_make = join ' ', map { _shell_quote($_) } @make;
+            my $shell_make_var = _shell_quote('MAKE=' . join(' ', @make));
+            my $shell_pass_through = join ' ',
+                map { _shell_quote($_) } @$pass_through;
+            my $shell_ext_dir = _shell_quote($ext_dir);
+            my $shell_return_dir = _shell_quote($return_dir);
 	    foreach my $clean_target ('realclean', 'veryclean') {
                 fallback_cleanup($return_dir, $clean_target, <<"EOS");
-cd $ext_dir
-if test ! -f Makefile -a -f Makefile.old; then
+cd $shell_ext_dir || exit 1
+if test ! -f Makefile && test -f Makefile.old; then
     echo "Note: Using Makefile.old"
-    make -f Makefile.old $clean_target MAKE='@make' @pass_through
+    $shell_make -f Makefile.old $clean_target $shell_make_var $shell_pass_through
 else
     if test ! -f Makefile ; then
 	echo "Warning: No Makefile!"
     fi
-    @make $clean_target MAKE='@make' @pass_through
+    $shell_make $clean_target $shell_make_var $shell_pass_through
 fi
-cd $return_dir
+cd $shell_return_dir || exit 1
 EOS
 	    }
 	}
@@ -583,6 +598,15 @@ EOS
     die "Unsuccessful make($ext_dir): code=$code" if $code != 0;
 
     chdir $return_dir || die "Cannot cd to $return_dir: $!";
+}
+
+# Quote one argument for a generated POSIX cleanup script.  Using a shell
+# command string directly here can run a different Make implementation or
+# split tool paths that are otherwise valid during the main build.
+sub _shell_quote {
+    my ($value) = @_;
+    $value =~ s/'/'\\''/g;
+    return "'$value'";
 }
 
 sub _quote_args {
