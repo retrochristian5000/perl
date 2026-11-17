@@ -25075,12 +25075,18 @@ if $test -f config.over; then
 	esac
 fi
 
-: in case they want portability, strip down executable paths
+: in case they want portability, strip down auto-discovered paths
 case "$d_portable" in
 "$define")
 	echo " "
-	echo "Stripping down executable paths..." >&4
+	echo "Stripping down auto-discovered executable paths..." >&4
 	for file in $loclist $trylist; do
+		# Command-line -D/-U selections are authoritative. Portable mode
+		# may shorten discovered tools, but not replace an explicitly
+		# selected native ar (or another named executable) with its basename.
+		if $grep "^$file=" UU/optdef.sh >/dev/null 2>&1; then
+			continue
+		fi
 		eval temp=\$$file
 		eval $file=`basename $temp`
 	done

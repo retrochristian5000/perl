@@ -10,7 +10,7 @@ use strict;
 use warnings;
 require './test.pl';
 
-plan(10);
+plan(11);
 
 open my $fh, '<', '../configure.gnu' or die "Cannot read configure.gnu: $!";
 my $gnu = do { local $/; <$fh> };
@@ -36,6 +36,8 @@ ok($configure =~ /cd UU \|\| \{\s+printf .*?exit 1/s,
    'Configure aborts when it cannot enter UU');
 ok($configure =~ m{rm -f \./\* \|\| \{\s+printf .*?exit 1}s,
    'Configure aborts when UU cannot be cleaned');
+ok($configure =~ /for file in \$loclist \$trylist; do\s+\#.*?if \$grep "\^\$file=" UU\/optdef\.sh .*?continue/s,
+   'portable-mode for-loop preserves explicitly selected tools');
 ok(system('/bin/sh', '-n', '../Configure') == 0,
    'generated Configure preserves POSIX shell syntax');
 ok(system('/bin/sh', '-n', '../configure.gnu') == 0,
