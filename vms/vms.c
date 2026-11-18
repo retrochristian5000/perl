@@ -9368,7 +9368,7 @@ add_item(struct list_item **head, struct list_item **tail, char *value, int *cou
     if (*head == 0)
         {
         *head = (struct list_item *) PerlMem_malloc(sizeof(struct list_item));
-        if (head == NULL) _ckvmssts_noperl(SS$_INSFMEM);
+        if (*head == NULL) _ckvmssts_noperl(SS$_INSFMEM);
         *tail = *head;
         }
     else {
