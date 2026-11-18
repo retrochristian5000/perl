@@ -5399,7 +5399,7 @@ int fork_with_resources()
             rc = DosQueryModuleName(dlls->handle, sizeof(dllname), dllname);
             if (rc) {
                 Perl_warn_nocontext("Can't find DLL name for the module `%s' by the handle %d, rc=%lu=%#lx",
-                                    dlls->modname, (int)dlls->handle, rc, rc);
+                                    dlls->modname, (int)dlls->handle, (unsigned long)rc, (unsigned long)rc);
                 dlls++;
                 continue;
             }
