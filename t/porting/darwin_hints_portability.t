@@ -10,7 +10,7 @@ use strict;
 use warnings;
 require './test.pl';
 
-plan(6);
+plan(9);
 
 open my $fh, '<', '../hints/darwin.sh'
     or die "Cannot read ../hints/darwin.sh: $!";
@@ -34,3 +34,15 @@ ok($hints =~ /case "\$ranlib" in\s*''\) ranlib='ranlib' ;;\s*esac/s,
 
 ok(system('/bin/sh', '-n', '../hints/darwin.sh') == 0,
    'Darwin hints preserve POSIX shell syntax');
+
+# Avoid shell evaluation of user-supplied flags and deployment targets.
+ok(index($hints, q{darwin_valid_deployment_target ()}) >= 0 &&
+   index($hints, q{*[!0-9.]*|*..*|.*|*.)}) >= 0,
+   'Darwin deployment version rejects nonnumeric and malformed values');
+
+ok(index($hints, q{ccflags="$ccflags -mmacosx-version-min=$2"}) >= 0 &&
+   index($hints, q{eval "$1=}) < 0,
+   'Darwin compiler flags do not pass through eval');
+
+ok(index($hints, q{2[0-6].*)}) >= 0,
+   'Darwin 26 does not admit dup3 and pipe2 before Darwin 27');

@@ -269,18 +269,38 @@ esac
 # using the -mmacosx-version-min flag.  If it is not set, we use
 # the OS X release as the min value for the flag.
 
-# Adds "-mmacosx-version-min=$2" to "$1" unless it already is there.
+# Add a deployment floor without shell eval or non-POSIX "local".
+# Only these three Configure flag variables are supported.
 add_macosx_version_min () {
-  local v
-  eval "v=\$$1"
-  case " $v " in
-  *"-mmacosx-version-min"*)
-     echo "NOT adding -mmacosx-version-min=$2 to $1 ($v)" >&4
-     ;;
-  *) echo "Adding -mmacosx-version-min=$2 to $1" >&4
-     eval "$1='$v -mmacosx-version-min=$2'"
-     ;;
+  case "$1" in
+    ccflags) darwin_min_flags=$ccflags ;;
+    ldflags) darwin_min_flags=$ldflags ;;
+    lddlflags) darwin_min_flags=$lddlflags ;;
+    *) echo "Invalid Darwin deployment flag variable: $1" >&4; return 1 ;;
   esac
+  case " $darwin_min_flags " in
+    *"-mmacosx-version-min"*)
+      echo "NOT adding -mmacosx-version-min=$2 to $1 ($darwin_min_flags)" >&4
+      ;;
+    *)
+      echo "Adding -mmacosx-version-min=$2 to $1" >&4
+      case "$1" in
+        ccflags) ccflags="$ccflags -mmacosx-version-min=$2" ;;
+        ldflags) ldflags="$ldflags -mmacosx-version-min=$2" ;;
+        lddlflags) lddlflags="$lddlflags -mmacosx-version-min=$2" ;;
+      esac
+      ;;
+  esac
+}
+
+# Prevent shell punctuation, malformed dotted versions, and invalid
+# major versions from reaching compiler flags or a Configure subprocess.
+darwin_valid_deployment_target () {
+  case "$1" in
+    *[!0-9.]*|*..*|.*|*.) return 1 ;;
+    [1-9][0-9].*|[1-9][0-9]) return 0 ;;
+  esac
+  return 1
 }
 
 # Perl bundles do not expect two-level namespace, added in Darwin 1.4.
@@ -329,26 +349,21 @@ case "$osvers" in  # Note: osvers is the kernel version, not the 10.x
 
    # We now use MACOSX_DEPLOYMENT_TARGET, if set, as an override by
    # capturing its value and adding it to the flags.
-    case "$MACOSX_DEPLOYMENT_TARGET" in
-    [1-9][0-9].*|[1-9][0-9])
-      add_macosx_version_min ccflags $MACOSX_DEPLOYMENT_TARGET
-      add_macosx_version_min ldflags $MACOSX_DEPLOYMENT_TARGET
-      add_macosx_version_min lddlflags $MACOSX_DEPLOYMENT_TARGET
-      ;;
-    '')
-      # Empty MACOSX_DEPLOYMENT_TARGET is okay.
-      ;;
-    *)
-      cat <<EOM >&4
+    if test -n "${MACOSX_DEPLOYMENT_TARGET-}"; then
+      if ! darwin_valid_deployment_target "$MACOSX_DEPLOYMENT_TARGET"; then
+        cat <<EOM >&4
 
 *** Unexpected MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET
 ***
-*** Please either set it to a valid macOS version number (e.g., 10.15 or 11.0) or to empty.
+*** Please set a numeric macOS version (for example, 10.15 or 15.0), or leave it empty.
 
 EOM
-      exit 1
-      ;;
-    esac
+        exit 1
+      fi
+      add_macosx_version_min ccflags "$MACOSX_DEPLOYMENT_TARGET"
+      add_macosx_version_min ldflags "$MACOSX_DEPLOYMENT_TARGET"
+      add_macosx_version_min lddlflags "$MACOSX_DEPLOYMENT_TARGET"
+    fi
 
     darwin_major=$(echo $osvers|awk -F. '{print $1}')
 
@@ -572,7 +587,7 @@ esac
 
 # dup3() and pipe2() are marked as available in Golden Gate onwards (27.0 / darwin 27)
 case "$osvers" in
-    [0-9].*|1[0-9].*|2[0-5].*)
+    [0-9].*|1[0-9].*|2[0-6].*)
         d_dup3=undef
         d_pipe2=undef
         ;;
