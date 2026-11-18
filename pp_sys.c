@@ -4048,15 +4048,13 @@ PP_wrapped(pp_rename, 2, 0)
 #ifdef HAS_RENAME
     anum = PerlLIO_rename(tmps, tmps2);
 #else
-    if (!(anum = PerlLIO_stat(tmps, &statbuf))) {
-        if (same_dirent(tmps2, tmps))	/* can always rename to same name */
-            anum = 1;
-        else {
-            if (PerlProc_geteuid() || PerlLIO_stat(tmps2, &statbuf) < 0 || !S_ISDIR(statbuf.st_mode))
-                (void)UNLINK(tmps2);
-            if (!(anum = link(tmps, tmps2)))
-                anum = UNLINK(tmps);
-        }
+    if (same_dirent(tmps2, tmps))	/* can always rename to same name */
+        anum = 1;
+    else {
+        if (PerlProc_geteuid() || PerlLIO_stat(tmps2, &statbuf) < 0 || !S_ISDIR(statbuf.st_mode))
+            (void)UNLINK(tmps2);
+        if (!(anum = link(tmps, tmps2)))
+            anum = UNLINK(tmps);
     }
 #endif
     SETi( anum >= 0 );
